@@ -1,0 +1,7 @@
+cat > .gitignore <<'GIT'
+build/
+*.o
+*.exe
+*.out
+.DS_Store
+GIT

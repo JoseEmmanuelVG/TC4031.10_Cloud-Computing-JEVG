@@ -15,8 +15,22 @@
 #define mostrar 10
 
 void imprimeArreglo(float *d);
-// Registro de ejecución: método, semilla (si aplica), tipo aleatorio, hilos y resultados
-void log_run(int metodo, long long semilla, int rand_kind, int max_threads, int num_threads_region, double tiempo, float *a, float *b, float *c);
+// Registro de ejecución: devuelve la ruta del fichero creado (vacío si falla).
+std::string log_run(int metodo, long long semilla, int rand_kind, int max_threads, int num_threads_region, double tiempo, float *a, float *b, float *c);
+
+// Leer respuesta sí/no con validación
+static bool read_yesno(const std::string &prompt) {
+    while (true) {
+        std::string line;
+        std::cout << prompt;
+        if (!std::getline(std::cin, line)) return false;
+        if (line.empty()) continue;
+        char c = line[0];
+        if (c == 's' || c == 'S' || c == 'y' || c == 'Y') return true;
+        if (c == 'n' || c == 'N') return false;
+        std::cout << "Respuesta inválida. Responde 's' o 'n'.\n";
+    }
+}
 
 // Leer entero con validación (prompt, rango inclusive)
 static int read_int(const std::string &prompt, int minv, int maxv) {
@@ -52,107 +66,113 @@ int main() {
     static float a[N], b[N], c[N];
     int i;
 
-    std::cout << "Elige método para llenar a y b:\n";
-    std::cout << " 1) Aleatorio (seed configurable)\n";
-    std::cout << " 2) Entrada por usuario (solo primeros " << mostrar << ")\n";
-    std::cout << " 3) Cálculo (por defecto)\n";
-    int opt = read_int("Opción [1-3]: ", 1, 3);
+    // Bucle principal para permitir múltiples ejecuciones
+    do {
+        std::cout << "Elige método para llenar a y b:\n";
+        std::cout << " 1) Aleatorio (seed configurable)\n";
+        std::cout << " 2) Entrada por usuario (solo primeros " << mostrar << ")\n";
+        std::cout << " 3) Cálculo (por defecto)\n";
+        int opt = read_int("Opción [1-3]: ", 1, 3);
 
-    // Semilla global para opciones aleatorias (-1 = no aplicable)
-    long long seed = -1;
-    // rand_kind: 0 = N/A, 1 = enteros, 2 = floats
-    int rand_kind = 0;
+        // Semilla global para opciones aleatorias (-1 = no aplicable)
+        long long seed = -1;
+        // rand_kind: 0 = N/A, 1 = enteros, 2 = floats
+        int rand_kind = 0;
 
-    if (opt == 1) {
-        // Opción aleatoria: solicitar semilla (vacío -> basada en tiempo)
-        std::cout << "Introduce semilla (vacío = time-based): ";
-        std::string s; std::getline(std::cin, s);
-        if (s.empty()) seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-        else {
-            std::stringstream ss(s);
-            if (!(ss >> seed)) seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-        }
-
-        // Inicializar generador con la semilla global
-        std::mt19937_64 rng(static_cast<unsigned long long>(seed));
-        std::cout << "Generar enteros (1) o floats (2)? ";
-        int kind = read_int("[1-2]: ", 1, 2);
-        rand_kind = kind;
-        if (kind == 1) {
-            // Distribución uniforme de enteros
-            std::uniform_int_distribution<int> dist(-1000, 1000);
-            for (i = 0; i < N; ++i) {
-                a[i] = static_cast<float>(dist(rng));
-                b[i] = static_cast<float>(dist(rng));
+        if (opt == 1) {
+            // Opción aleatoria: solicitar semilla (vacío -> basada en tiempo)
+            std::cout << "Introduce semilla (vacío = time-based): ";
+            std::string s; std::getline(std::cin, s);
+            if (s.empty()) seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+            else {
+                std::stringstream ss(s);
+                if (!(ss >> seed)) seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
             }
+
+            // Inicializar generador con la semilla global
+            std::mt19937_64 rng(static_cast<unsigned long long>(seed));
+            std::cout << "Generar enteros (1) o floats (2)? ";
+            int kind = read_int("[1-2]: ", 1, 2);
+            rand_kind = kind;
+            if (kind == 1) {
+                // Distribución uniforme de enteros
+                std::uniform_int_distribution<int> dist(-1000, 1000);
+                for (i = 0; i < N; ++i) {
+                    a[i] = static_cast<float>(dist(rng));
+                    b[i] = static_cast<float>(dist(rng));
+                }
+            } else {
+                // Distribución uniforme de reales (float)
+                std::uniform_real_distribution<float> dist(-1000.0f, 1000.0f);
+                for (i = 0; i < N; ++i) {
+                    a[i] = dist(rng);
+                    b[i] = dist(rng);
+                }
+            }
+
+        } else if (opt == 2) {
+            // Entrada del usuario para los primeros 'mostrar' valores; el resto se genera automáticamente
+            std::cout << "Introduce hasta " << mostrar << " valores para 'a' (uno por línea):\n";
+            for (i = 0; i < mostrar; ++i) {
+                a[i] = read_float("a[" + std::to_string(i) + "] = ");
+            }
+            std::cout << "Introduce hasta " << mostrar << " valores para 'b' (uno por línea):\n";
+            for (i = 0; i < mostrar; ++i) {
+                b[i] = read_float("b[" + std::to_string(i) + "] = ");
+            }
+            // Rellenar el resto automáticamente
+            for (i = mostrar; i < N; ++i) {
+                a[i] = i * 10.0f;
+                b[i] = (i + 3) * 3.7f;
+            }
+
         } else {
-            // Distribución uniforme de reales (float)
-            std::uniform_real_distribution<float> dist(-1000.0f, 1000.0f);
-            for (i = 0; i < N; ++i) {
-                a[i] = dist(rng);
-                b[i] = dist(rng);
+            // Relleno por cálculo (comportamiento original)
+            for (i = 0; i < N; i++) {
+                a[i] = i * 10;
+                b[i] = (i + 3) * 3.7f;
             }
         }
 
-    } else if (opt == 2) {
-        // Entrada del usuario para los primeros 'mostrar' valores; el resto se genera automáticamente
-        std::cout << "Introduce hasta " << mostrar << " valores para 'a' (uno por línea):\n";
-        for (i = 0; i < mostrar; ++i) {
-            a[i] = read_float("a[" + std::to_string(i) + "] = ");
-        }
-        std::cout << "Introduce hasta " << mostrar << " valores para 'b' (uno por línea):\n";
-        for (i = 0; i < mostrar; ++i) {
-            b[i] = read_float("b[" + std::to_string(i) + "] = ");
-        }
-        // Fill remainder automatically (fast pattern)
-        for (i = mostrar; i < N; ++i) {
-            a[i] = i * 10.0f;
-            b[i] = (i + 3) * 3.7f;
+        int pedazos = chunk;
+
+        // Obtener número de hilos máximos y el número de hilos dentro de una región paralela
+        int max_threads = omp_get_max_threads();
+        int num_threads_region = 0;
+        #pragma omp parallel
+        {
+            #pragma omp single
+            num_threads_region = omp_get_num_threads();
         }
 
-    } else {
-        // Relleno por cálculo (comportamiento original)
+        // Medir tiempo y ejecutar suma en paralelo (región de trabajo)
+        double t0 = omp_get_wtime();
+
+        #pragma omp parallel for shared(a,b,c,pedazos) private(i) schedule(static, pedazos)
         for (i = 0; i < N; i++) {
-            a[i] = i * 10;
-            b[i] = (i + 3) * 3.7f;
+            c[i] = a[i] + b[i];
         }
-    }
 
-    int pedazos = chunk;
+        double t1 = omp_get_wtime();
 
-    // Obtener número de hilos máximos y el número de hilos dentro de una región paralela
-    int max_threads = omp_get_max_threads();
-    int num_threads_region = 0;
-    #pragma omp parallel
-    {
-        #pragma omp single
-        num_threads_region = omp_get_num_threads();
-    }
+        std::cout << "Tiempo (paralelo) = " << std::fixed << std::setprecision(6) << (t1 - t0) << " segundos\n\n";
 
-    // Medir tiempo y ejecutar suma en paralelo (región de trabajo)
-    double t0 = omp_get_wtime();
+        std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo a:\n";
+        imprimeArreglo(a);
 
-    #pragma omp parallel for shared(a,b,c,pedazos) private(i) schedule(static, pedazos)
-    for (i = 0; i < N; i++) {
-        c[i] = a[i] + b[i];
-    }
+        std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo b:\n";
+        imprimeArreglo(b);
 
-    double t1 = omp_get_wtime();
+        std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo c:\n";
+        imprimeArreglo(c);
 
-    std::cout << "Tiempo (paralelo) = " << std::fixed << std::setprecision(6) << (t1 - t0) << " segundos\n\n";
+        // Registrar ejecución en fichero y mostrar la ruta en consola
+        std::string logfile = log_run(opt, seed, rand_kind, max_threads, num_threads_region, (t1 - t0), a, b, c);
+        if (!logfile.empty()) std::cout << "Registro guardado en: " << logfile << "\n";
 
-    std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo a:\n";
-    imprimeArreglo(a);
+    } while (read_yesno("¿Desea realizar otra ejecución? (s/n): "));
 
-    std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo b:\n";
-    imprimeArreglo(b);
-
-    std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo c:\n";
-    imprimeArreglo(c);
-
-    // Registrar ejecución en fichero y mantener salida por consola
-    log_run(opt, seed, rand_kind, max_threads, num_threads_region, (t1 - t0), a, b, c);
-
+    std::cout << "Finalizando. Gracias.\n";
     return 0;
 }
 
@@ -164,7 +184,8 @@ void imprimeArreglo(float *d) {
 }
 
 // Registrar la ejecución en un fichero timestamped dentro de docs/runs/
-void log_run(int metodo, long long semilla, int rand_kind, int max_threads, int num_threads_region, double tiempo, float *a, float *b, float *c) {
+// Devuelve la ruta del fichero creado o cadena vacía si hubo error.
+std::string log_run(int metodo, long long semilla, int rand_kind, int max_threads, int num_threads_region, double tiempo, float *a, float *b, float *c) {
     namespace fs = std::filesystem;
     try {
         fs::create_directories("docs/runs");
@@ -183,7 +204,7 @@ void log_run(int metodo, long long semilla, int rand_kind, int max_threads, int 
     fname << "docs/runs/run_" << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".txt";
 
     std::ofstream ofs(fname.str());
-    if (!ofs) return;
+    if (!ofs) return std::string();
 
     ofs << "Fecha y hora: " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << '\n';
     ofs << "Método llenado: " << metodo << "\n";
@@ -206,4 +227,5 @@ void log_run(int metodo, long long semilla, int rand_kind, int max_threads, int 
     for (int i = 0; i < mostrar; ++i) ofs << c[i] << (i+1<mostrar?", ":"\n");
 
     ofs.close();
+    return fname.str();
 }

@@ -6,12 +6,16 @@
 #include <limits>
 #include <chrono>
 #include <iomanip>
+#include <filesystem>
+#include <fstream>
+#include <ctime>
 
 #define N 1000
 #define chunk 100
 #define mostrar 10
 
 void imprimeArreglo(float *d);
+void log_run(int metodo, long long semilla, double tiempo, float *a, float *b, float *c);
 
 // Read integer option with validation
 static int read_int(const std::string &prompt, int minv, int maxv) {
@@ -52,6 +56,8 @@ int main() {
     std::cout << " 2) Entrada por usuario (solo primeros " << mostrar << ")\n";
     std::cout << " 3) Cálculo (por defecto)\n";
     int opt = read_int("Opción [1-3]: ", 1, 3);
+
+    long long seed = -1; // -1 means not applicable
 
     if (opt == 1) {
         // Random fill
@@ -127,6 +133,9 @@ int main() {
     std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo c:\n";
     imprimeArreglo(c);
 
+    // Log run to file (also keeps console output)
+    log_run(opt, seed, (t1 - t0), a, b, c);
+
     return 0;
 }
 
@@ -135,4 +144,47 @@ void imprimeArreglo(float *d) {
         std::cout << d[x] << " - ";
     }
     std::cout << std::endl;
+}
+
+// Log the run to a timestamped file under docs/runs/
+void log_run(int metodo, long long semilla, double tiempo, float *a, float *b, float *c) {
+    namespace fs = std::filesystem;
+    try {
+        fs::create_directories("docs/runs");
+    } catch (...) {}
+
+    // timestamp for filename
+    auto now = std::chrono::system_clock::now();
+    std::time_t t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm;
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    std::ostringstream fname;
+    fname << "docs/runs/run_" << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".txt";
+
+    std::ofstream ofs(fname.str());
+    if (!ofs) return;
+
+    ofs << "Fecha y hora: " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << '\n';
+    ofs << "Método llenado: " << metodo << "\n";
+    if (semilla >= 0) ofs << "Semilla: " << semilla << "\n";
+    else ofs << "Semilla: N/A\n";
+    ofs << "N: " << N << "\n";
+    ofs << "chunk: " << chunk << "\n";
+    ofs << "mostrar: " << mostrar << "\n";
+    ofs << "hilos (omp_get_max_threads): " << omp_get_max_threads() << "\n";
+    ofs << std::fixed << std::setprecision(6);
+    ofs << "tiempo_paralelo: " << tiempo << " segundos\n\n";
+
+    ofs << "Primeros " << mostrar << " valores de a:\n";
+    for (int i = 0; i < mostrar; ++i) ofs << a[i] << (i+1<mostrar?", ":"\n");
+    ofs << "Primeros " << mostrar << " valores de b:\n";
+    for (int i = 0; i < mostrar; ++i) ofs << b[i] << (i+1<mostrar?", ":"\n");
+    ofs << "Primeros " << mostrar << " valores de c:\n";
+    for (int i = 0; i < mostrar; ++i) ofs << c[i] << (i+1<mostrar?", ":"\n");
+
+    ofs.close();
 }

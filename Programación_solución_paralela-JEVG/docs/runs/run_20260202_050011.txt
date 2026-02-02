@@ -1,0 +1,17 @@
+Fecha y hora: 2026-02-02 05:00:11
+Método llenado: 2
+Semilla: N/A
+Tipo aleatorio (rand_kind): 0 (1=enteros,2=floats,0=N/A)
+N: 1000
+chunk: 100
+mostrar: 10
+hilos (omp_get_max_threads): 2
+hilos en región paralela (omp_get_num_threads): 2
+tiempo_paralelo: 0.000002 segundos
+
+Primeros 10 valores de a:
+5.000000, 8.000000, 7.000000, 4.000000, 6.000000, 8.000000, 4.000000, 4.000000, 5.000000, 5.000000
+Primeros 10 valores de b:
+55.000000, 5.000000, 55.000000, 48.000000, 4.000000, 4.000000, 8.000000, 5.000000, 45.000000, 4.000000
+Primeros 10 valores de c:
+60.000000, 13.000000, 62.000000, 52.000000, 10.000000, 12.000000, 12.000000, 9.000000, 50.000000, 9.000000

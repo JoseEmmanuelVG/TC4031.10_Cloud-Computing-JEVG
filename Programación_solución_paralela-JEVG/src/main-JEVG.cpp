@@ -15,9 +15,10 @@
 #define mostrar 10
 
 void imprimeArreglo(float *d);
-void log_run(int metodo, long long semilla, double tiempo, float *a, float *b, float *c);
+// Registro de ejecución: método, semilla (si aplica), tipo aleatorio, hilos y resultados
+void log_run(int metodo, long long semilla, int rand_kind, int max_threads, int num_threads_region, double tiempo, float *a, float *b, float *c);
 
-// Read integer option with validation
+// Leer entero con validación (prompt, rango inclusive)
 static int read_int(const std::string &prompt, int minv, int maxv) {
     while (true) {
         std::string line;
@@ -32,7 +33,7 @@ static int read_int(const std::string &prompt, int minv, int maxv) {
     }
 }
 
-// Read float with validation
+// Leer float con validación (prompt)
 static float read_float(const std::string &prompt) {
     while (true) {
         std::string line;
@@ -57,11 +58,13 @@ int main() {
     std::cout << " 3) Cálculo (por defecto)\n";
     int opt = read_int("Opción [1-3]: ", 1, 3);
 
-    long long seed = -1; // -1 means not applicable
+    // Semilla global para opciones aleatorias (-1 = no aplicable)
+    long long seed = -1;
+    // rand_kind: 0 = N/A, 1 = enteros, 2 = floats
+    int rand_kind = 0;
 
     if (opt == 1) {
-        // Random fill
-        long long seed = 0;
+        // Opción aleatoria: solicitar semilla (vacío -> basada en tiempo)
         std::cout << "Introduce semilla (vacío = time-based): ";
         std::string s; std::getline(std::cin, s);
         if (s.empty()) seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -70,16 +73,20 @@ int main() {
             if (!(ss >> seed)) seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
         }
 
+        // Inicializar generador con la semilla global
         std::mt19937_64 rng(static_cast<unsigned long long>(seed));
         std::cout << "Generar enteros (1) o floats (2)? ";
         int kind = read_int("[1-2]: ", 1, 2);
+        rand_kind = kind;
         if (kind == 1) {
+            // Distribución uniforme de enteros
             std::uniform_int_distribution<int> dist(-1000, 1000);
             for (i = 0; i < N; ++i) {
                 a[i] = static_cast<float>(dist(rng));
                 b[i] = static_cast<float>(dist(rng));
             }
         } else {
+            // Distribución uniforme de reales (float)
             std::uniform_real_distribution<float> dist(-1000.0f, 1000.0f);
             for (i = 0; i < N; ++i) {
                 a[i] = dist(rng);
@@ -88,7 +95,7 @@ int main() {
         }
 
     } else if (opt == 2) {
-        // User input for first 'mostrar' values; rest generated automatically
+        // Entrada del usuario para los primeros 'mostrar' valores; el resto se genera automáticamente
         std::cout << "Introduce hasta " << mostrar << " valores para 'a' (uno por línea):\n";
         for (i = 0; i < mostrar; ++i) {
             a[i] = read_float("a[" + std::to_string(i) + "] = ");
@@ -104,7 +111,7 @@ int main() {
         }
 
     } else {
-        // Calculation fill (original behavior)
+        // Relleno por cálculo (comportamiento original)
         for (i = 0; i < N; i++) {
             a[i] = i * 10;
             b[i] = (i + 3) * 3.7f;
@@ -113,6 +120,16 @@ int main() {
 
     int pedazos = chunk;
 
+    // Obtener número de hilos máximos y el número de hilos dentro de una región paralela
+    int max_threads = omp_get_max_threads();
+    int num_threads_region = 0;
+    #pragma omp parallel
+    {
+        #pragma omp single
+        num_threads_region = omp_get_num_threads();
+    }
+
+    // Medir tiempo y ejecutar suma en paralelo (región de trabajo)
     double t0 = omp_get_wtime();
 
     #pragma omp parallel for shared(a,b,c,pedazos) private(i) schedule(static, pedazos)
@@ -133,8 +150,8 @@ int main() {
     std::cout << "Imprimiendo los primeros " << mostrar << " valores del arreglo c:\n";
     imprimeArreglo(c);
 
-    // Log run to file (also keeps console output)
-    log_run(opt, seed, (t1 - t0), a, b, c);
+    // Registrar ejecución en fichero y mantener salida por consola
+    log_run(opt, seed, rand_kind, max_threads, num_threads_region, (t1 - t0), a, b, c);
 
     return 0;
 }
@@ -146,8 +163,8 @@ void imprimeArreglo(float *d) {
     std::cout << std::endl;
 }
 
-// Log the run to a timestamped file under docs/runs/
-void log_run(int metodo, long long semilla, double tiempo, float *a, float *b, float *c) {
+// Registrar la ejecución en un fichero timestamped dentro de docs/runs/
+void log_run(int metodo, long long semilla, int rand_kind, int max_threads, int num_threads_region, double tiempo, float *a, float *b, float *c) {
     namespace fs = std::filesystem;
     try {
         fs::create_directories("docs/runs");
@@ -172,10 +189,12 @@ void log_run(int metodo, long long semilla, double tiempo, float *a, float *b, f
     ofs << "Método llenado: " << metodo << "\n";
     if (semilla >= 0) ofs << "Semilla: " << semilla << "\n";
     else ofs << "Semilla: N/A\n";
+    ofs << "Tipo aleatorio (rand_kind): " << rand_kind << " (1=enteros,2=floats,0=N/A)\n";
     ofs << "N: " << N << "\n";
     ofs << "chunk: " << chunk << "\n";
     ofs << "mostrar: " << mostrar << "\n";
-    ofs << "hilos (omp_get_max_threads): " << omp_get_max_threads() << "\n";
+    ofs << "hilos (omp_get_max_threads): " << max_threads << "\n";
+    ofs << "hilos en región paralela (omp_get_num_threads): " << num_threads_region << "\n";
     ofs << std::fixed << std::setprecision(6);
     ofs << "tiempo_paralelo: " << tiempo << " segundos\n\n";
 
